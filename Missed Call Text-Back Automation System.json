@@ -1,0 +1,362 @@
+{
+  "name": "Missed Call Text-Back Automation System",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "<__PLACEHOLDER_VALUE__webhook-path (e.g., missed-call)__>",
+        "options": {}
+      },
+      "id": "9586cf07-b06c-43f0-9a39-3a0658257433",
+      "name": "Missed Call Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        144,
+        272
+      ],
+      "webhookId": "39a38990-f6cb-43f8-b974-d61f800333f1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "callerPhone",
+              "value": "={{ $json.body.phoneNumber }}",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "smsMessage",
+              "value": "<__PLACEHOLDER_VALUE__Your SMS message (e.g., \"Hi! We missed your call. Schedule an appointment: https://example.com/book\")__>",
+              "type": "string"
+            },
+            {
+              "id": "3",
+              "name": "fromNumber",
+              "value": "<__PLACEHOLDER_VALUE__Your Twilio phone number (e.g., +1234567890)__>",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "80a56625-5b1d-411d-897a-be7fd29bef6e",
+      "name": "Prepare SMS Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1040,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "from": "={{ $json.fromNumber }}",
+        "to": "={{ $json.callerPhone }}",
+        "message": "={{ $json.smsMessage }}",
+        "options": {}
+      },
+      "id": "60da9f0f-3515-4d4b-b6e4-6dbd909b6e63",
+      "name": "Send SMS",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1264,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "1",
+              "leftValue": "={{ $json.body.phoneNumber }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            },
+            {
+              "id": "2",
+              "leftValue": "={{ $json.body.phoneNumber }}",
+              "rightValue": "^\\+?[1-9]\\d{1,14}$",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7c4829c5-9fa3-48cf-9720-d09eee428df2",
+      "name": "Validate Phone & Check Duplicates",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        368,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const phoneNumber = $input.first().json.body.phoneNumber;\nconst currentTime = new Date();\nconst tenMinutesAgo = new Date(currentTime - 10 * 60 * 1000);\n\nif (!$execution.customData) {\n  $execution.customData = { recentCalls: [] };\n}\n\nconst recentCalls = $execution.customData.recentCalls || [];\nconst isDuplicate = recentCalls.some(call => \n  call.phone === phoneNumber && new Date(call.timestamp) > tenMinutesAgo\n);\n\nif (!isDuplicate) {\n  recentCalls.push({ phone: phoneNumber, timestamp: currentTime.toISOString() });\n  $execution.customData.recentCalls = recentCalls.filter(call => \n    new Date(call.timestamp) > tenMinutesAgo\n  );\n}\n\nreturn [{ json: { ...($input.first().json), isDuplicate } }];"
+      },
+      "id": "2da28106-99e1-41e1-ba3b-edc8b1c17f79",
+      "name": "Check Recent Calls (10min)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "1",
+              "leftValue": "={{ $json.isDuplicate }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c13811c5-ec7c-42e3-83ef-0845d355a973",
+      "name": "Filter Duplicates",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        816,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "text": "=🔔 *Missed Call Alert*\n\n📞 Phone: {{ $('Prepare SMS Message').item.json.callerPhone }}\n⏰ Time: {{ $now.toFormat(\"MMM d, yyyy h:mm a\") }}\n✅ Automated text-back sent successfully!\n\n_Lead logged to Google Sheets_",
+        "otherOptions": {}
+      },
+      "id": "e07e6b95-2013-4282-8904-e4f2aabe89de",
+      "name": "Notify Sales Team",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        1488,
+        176
+      ],
+      "webhookId": "6896429e-afb6-4828-a7cf-d29db67d7d2d"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        }
+      },
+      "id": "c7fd1a69-dc84-456c-8c5f-86eb0f46e723",
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        368,
+        368
+      ],
+      "executeOnce": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "bJiAgBZYLDX1lLgo",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## 🛡️ Validation Layer\n\nChecks phone number format and filters duplicates within 10 minutes",
+        "height": 300,
+        "width": 748,
+        "color": 3
+      },
+      "id": "3bb37063-611a-46ee-a5a9-caec99a37675",
+      "name": "Sticky Note 4ca52d64",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        272,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 📤 SMS Processing\n\nPrepares and sends automated text-back to caller",
+        "height": 200,
+        "width": 524,
+        "color": 2
+      },
+      "id": "5e609fcd-fe17-429a-b781-cecb3bed9b60",
+      "name": "Sticky Note 851e0781",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        976,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 📊 Lead Logging\n\nParallel branch: logs every call to Google Sheets",
+        "height": 200,
+        "width": 300,
+        "color": 4
+      },
+      "id": "4365d554-c7ad-49ab-998e-5d71fbc4c470",
+      "name": "Sticky Note 2d43751c",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        528,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🔔 Team Notification\n\nAlerts sales team after successful SMS delivery",
+        "height": 296,
+        "width": 300,
+        "color": 5
+      },
+      "id": "0d727acf-329b-4bb9-99da-c44afe59bad0",
+      "name": "Sticky Note 46a7acb8",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1408,
+        32
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Missed Call Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Phone & Check Duplicates",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare SMS Message": {
+      "main": [
+        [
+          {
+            "node": "Send SMS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Phone & Check Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Check Recent Calls (10min)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Recent Calls (10min)": {
+      "main": [
+        [
+          {
+            "node": "Filter Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Prepare SMS Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send SMS": {
+      "main": [
+        [
+          {
+            "node": "Notify Sales Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "d044e3af-f40d-4d2f-ab21-a7b4daf74dbe",
+  "meta": {
+    "instanceId": "5a8e2b5254bbf992edd968c61dd0cc4bb18ba243e50612f8d3043d5b5b3b95fd"
+  },
+  "nodeGroups": [],
+  "id": "9ADiRb7owKWmVcmn",
+  "tags": []
+}
