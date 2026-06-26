@@ -8,7 +8,7 @@ A resilient, production-ready n8n workflow designed to handle incoming missed ca
 
 Many missed call text-back systems rely on a basic 2-node setup that can fail in real-world scenarios (e.g., spamming a lead who calls back multiple times or losing track of the lead data). This architecture builds a resilient infrastructure around the core SMS pipeline to ensure data integrity and team visibility.
 
-![Workflow Screenshot](your-screenshot-link-here.png)
+![Workflow Architecture](workflow1.jpeg)
 
 ## 🛠️ Features & Architecture
 
